@@ -260,7 +260,7 @@ Not counted above: the 10 items NX-328..NX-337 in "Brand, marketing, community a
 | NX-337 | Marketing backlog triage: accept or drop MKT-1..MKT-19 from `docs/review/MARKETING-AND-PRODUCTION-RESEARCH.md` §7 into this tracker | S | ⬜ | — |
 | NX-338 | Vault scaffold (private repo `operation-nexus-vault`): structure, `AGENTS.md`, `CLAUDE.md`, house skill standard, Vale config, front-matter checker; owner sets the vault ruleset and `maintainers`-only access (Q-MKT-14, Q-MKT-15) | M | ✅ | NX-337 |
 | NX-339 | First marketing skills with test cases (3 minimum, 5 preferred) run on their claimed model tier: `devlog-outline`, `social-post-draft`, `clip-package`, `style-check` (Q-MKT-15) | M | ✅ | NX-338 |
-| NX-340 | Voice interview and voice brief: about 15 questions, 3 drafts the owner rewrites, ban list and examples file; repeat monthly for a quarter (Q-MKT-15) | S | ✅ | NX-338 |
+| NX-340 | Voice interview and voice brief: about 15 questions, 3 drafts the owner rewrites, ban list and examples file; repeat monthly for a quarter (Q-MKT-15) | S | 🟨 | NX-338 |
 | NX-341 | Local production scripts in the vault (ffmpeg clipping, whisper transcripts, caption files) the owner runs on a desktop; text outputs committed for cloud agents (Q-MKT-14) | M | ⬜ | NX-338 |
 | NX-342 | Scheduled weekly drafting run (max 5 drafts, one vault PR, no platform credentials) and the weekly metrics note (Q-MKT-14, Q-AI-10) | S | ⬜ | NX-339 |
 | NX-343 | Service context pack: export of voice summary, `RELEASED` lore and campaign facts from the vault for read-only use by services; shared libraries and event feed (Q-OPS-11, BRAND-OPS §4.3) | M | ⬜ | NX-328, NX-338 |
