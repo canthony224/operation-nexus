@@ -260,7 +260,7 @@ Not counted above: the 10 items NX-328..NX-337 in "Brand, marketing, community a
 | NX-337 | Marketing backlog triage: accept or drop MKT-1..MKT-19 from `docs/review/MARKETING-AND-PRODUCTION-RESEARCH.md` §7 into this tracker | S | ⬜ | — |
 | NX-338 | Vault scaffold (private repo `operation-nexus-vault`): structure, `AGENTS.md`, `CLAUDE.md`, house skill standard, Vale config, front-matter checker; owner sets the vault ruleset and `maintainers`-only access (Q-MKT-14, Q-MKT-15) | M | ✅ | NX-337 |
 | NX-339 | First marketing skills with test cases (3 minimum, 5 preferred) run on their claimed model tier: `devlog-outline`, `social-post-draft`, `clip-package`, `style-check` (Q-MKT-15) | M | ✅ | NX-338 |
-| NX-340 | Voice interview and voice brief: about 15 questions, 3 drafts the owner rewrites, ban list and examples file; repeat monthly for a quarter (Q-MKT-15) | S | 🟨 | NX-338 |
+| NX-340 | Voice interview and voice brief: about 15 questions, 3 drafts the owner rewrites, ban list and examples file; repeat monthly for a quarter (Q-MKT-15) | S | ✅ | NX-338 |
 | NX-341 | Local production scripts in the vault (ffmpeg clipping, whisper transcripts, caption files) the owner runs on a desktop; text outputs committed for cloud agents (Q-MKT-14) | M | ⬜ | NX-338 |
 | NX-342 | Scheduled weekly drafting run (max 5 drafts, one vault PR, no platform credentials) and the weekly metrics note (Q-MKT-14, Q-AI-10) | S | ⬜ | NX-339 |
 | NX-343 | Service context pack: export of voice summary, `RELEASED` lore and campaign facts from the vault for read-only use by services; shared libraries and event feed (Q-OPS-11, BRAND-OPS §4.3) | M | ⬜ | NX-328, NX-338 |
@@ -269,7 +269,7 @@ Not counted above: the 10 items NX-328..NX-337 in "Brand, marketing, community a
 | NX-346 | NULL meme-flavored template lines: mechanism decided (Q-MKT-17); implement with NX-326 and the no-real-world-references rule (Q-MKT-17) | S | ⬜ | NX-326 |
 | NX-347 | Contributor license template (flat fee, contributor keeps copyright, project license, no voice training or cloning, credit) and one narrow attorney review before the first paid use (Q-LEGAL-13; ties NX-289) | S | ⬜ | — |
 | NX-348 | Credits page on the site and in the stream's about section; alias and removal-on-request rules (Q-LEGAL-13) | S | ⬜ | — |
-| NX-349 | Draft account profile copy (bios, link-page text) for each brand account, in the vault, unpublished (Q-MKT-14) | S | 🟨 | NX-340 |
+| NX-349 | Draft account profile copy (bios, link-page text) for each brand account, in the vault; the owner approved all eight on 2026-10-18 and pastes them into the profiles by hand (Q-MKT-14) | S | 👀 | NX-340 |
 | NX-350 | `meme-brief` skill (on demand): owner's weekly examples to source-dated format ideas and drafts, tests on its tier (Q-MKT-16) | S | 🟨 | NX-339 |
 
 ## Backlog (unscheduled — from owner's conversation & plans)
