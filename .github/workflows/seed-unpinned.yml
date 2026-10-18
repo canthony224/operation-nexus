@@ -1,0 +1,11 @@
+# NX-012 throwaway seed: unpinned action for zizmor. Never merge.
+name: seed-unpinned
+on: workflow_dispatch
+permissions: {}
+jobs:
+  seed:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
