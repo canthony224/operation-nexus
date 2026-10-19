@@ -60,6 +60,7 @@ MIN_DEFAULT_CHANNELS = 7  # onboarding constraints, Discord docs: Modify Guild O
 MIN_WRITABLE_DEFAULT_CHANNELS = 5
 ONBOARDING_DEFAULT_MODE = 0
 PROMPT_MULTIPLE_CHOICE = 0
+MAX_WELCOME_CHANNELS = 5  # Discord shows at most five welcome screen channels (UNVERIFIED limit)
 
 Json = dict[str, Any]
 # transport(method, url, headers, body) -> (status, response headers, response body bytes)
@@ -193,7 +194,7 @@ _ID = r"[0-9]+"
 # The only requests this tool can make (DS-5). Anything else is refused before it is sent: there is
 # no DELETE, no member, ban, kick or direct-message path, and messages only in guild channels.
 ALLOWED_REQUESTS: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
-    (method, re.compile(f"^{pattern}$"))
+    (method, re.compile(pattern))
     for method, pattern in (
         ("GET", rf"/guilds/{_ID}"),
         ("GET", rf"/guilds/{_ID}/(roles|channels|welcome-screen|onboarding)"),
@@ -225,7 +226,7 @@ class Api:
         self._sleep = sleep
 
     def call(self, method: str, path: str, body: Json | None = None) -> Any:
-        if not any(m == method and rx.match(path) for m, rx in ALLOWED_REQUESTS):
+        if not any(m == method and rx.fullmatch(path) for m, rx in ALLOWED_REQUESTS):
             raise SetupError(f"request not allowed: {method} {path}")
         headers = {
             "Authorization": f"Bot {self._token}",
@@ -404,8 +405,10 @@ class Setup:
 class Community:
     """The community stage (DS-11 to DS-13): server settings, welcome screen, onboarding, messages.
 
-    Reads are always made; writes only when `apply` is set. Existing features, onboarding
-    prompts and default channels are kept and added to, never replaced or removed.
+    Reads are always made; writes only when `apply` is set. Existing features, welcome screen
+    channels, onboarding prompts, options, mode and default channels are kept and added to. The
+    verification level and content filter are never lowered. Only the welcome description, the
+    blueprint's own prompt and the settings named in the blueprint are set.
     """
 
     def __init__(
@@ -447,19 +450,25 @@ class Community:
         guild = self.api.call("GET", f"/guilds/{self.guild}")
         on = COMMUNITY_FEATURE in guild.get("features", [])
         self.ensure_guild(guild, community)
-        if not self.apply and not on:
-            self.out("(not yet a Community server: the next two stages are planned as if it were)")
-        self.ensure_welcome(community, on)
+        if not on and not self.apply:
+            self.out("(not yet a Community server: the next stages are planned as if it were)")
+        # once Community is on (for real, under --apply) the welcome screen and onboarding are
+        # read fresh, so anything Discord seeded or the owner set is kept
+        self.ensure_welcome(community, on or self.apply)
         if not self.skip_onboarding:
-            self.ensure_onboarding(community, on)
+            self.ensure_onboarding(community, on or self.apply)
 
     def ensure_guild(self, guild: Json, community: Json) -> None:
         want: Json = {
             "description": community["description"],
             "preferred_locale": community["preferred_locale"],
-            "verification_level": community["verification_level"],
+            "verification_level": max(
+                community["verification_level"], int(guild.get("verification_level") or 0)
+            ),
             "default_message_notifications": community["default_message_notifications"],
-            "explicit_content_filter": community["explicit_content_filter"],
+            "explicit_content_filter": max(
+                community["explicit_content_filter"], int(guild.get("explicit_content_filter") or 0)
+            ),
             "rules_channel_id": self.channels[community["rules_channel"]],
             "public_updates_channel_id": self.channels[community["updates_channel"]],
             "safety_alerts_channel_id": self.channels[community["safety_alerts_channel"]],
@@ -479,21 +488,18 @@ class Community:
 
     def ensure_welcome(self, community: Json, on: bool) -> None:
         screen = community["welcome_screen"]
-        want = {
-            "enabled": True,
-            "description": screen["description"],
-            "welcome_channels": [
-                {
-                    "channel_id": self.channels[i["channel"]],
-                    "description": i["description"],
-                    "emoji_id": None,
-                    "emoji_name": None,
-                }
-                for i in screen["channels"]
-            ],
-        }
         have = self.api.call("GET", f"/guilds/{self.guild}/welcome-screen") if on else {}
-        have_channels = [
+        ours = [
+            {
+                "channel_id": self.channels[i["channel"]],
+                "description": i["description"],
+                "emoji_id": None,
+                "emoji_name": None,
+            }
+            for i in screen["channels"]
+        ]
+        ours_ids = {c["channel_id"] for c in ours}
+        kept = [
             {
                 "channel_id": str(c["channel_id"]),
                 "description": c["description"],
@@ -502,13 +508,34 @@ class Community:
             }
             for c in have.get("welcome_channels", [])
         ]
+        current = {c["channel_id"]: c for c in kept}
+        # ours first (keeping an emoji the owner already set on the same channel), then the
+        # owner's other channels, up to Discord's limit
+        merged = [
+            {
+                **c,
+                "emoji_id": current[c["channel_id"]]["emoji_id"],
+                "emoji_name": current[c["channel_id"]]["emoji_name"],
+            }
+            if c["channel_id"] in current
+            else c
+            for c in ours
+        ]
+        merged += [c for c in kept if c["channel_id"] not in ours_ids]
+        merged = merged[:MAX_WELCOME_CHANNELS]
+        want = {"enabled": True, "description": screen["description"], "welcome_channels": merged}
         if (
-            not have.get("enabled", True)
+            not have.get("enabled", False)
             or have.get("description") != want["description"]
-            or have_channels != want["welcome_channels"]
+            or kept != merged
         ):
+            extra = len(merged) - len(ours)
             self._write(
-                "PATCH", f"/guilds/{self.guild}/welcome-screen", want, "set the welcome screen"
+                "PATCH",
+                f"/guilds/{self.guild}/welcome-screen",
+                want,
+                f"set the welcome screen (description {want['description']!r}, "
+                f"{len(ours)} linked channels, keeps {max(extra, 0)} you added)",
             )
 
     @staticmethod
@@ -552,10 +579,10 @@ class Community:
             ours_ok = False
         else:
             current = ours.get("options", [])
+            first = current[0] if current else {}
             ours_ok = (
-                len(current) == 1
-                and current[0].get("title") == option["title"]
-                and [str(r) for r in current[0].get("role_ids", [])] == [role_id]
+                first.get("title") == option["title"]
+                and [str(r) for r in first.get("role_ids", [])] == [role_id]
                 and ours.get("required") is True
                 and ours.get("in_onboarding") is True
             )
@@ -563,7 +590,7 @@ class Community:
                 prompts[prompts.index(ours)] = {
                     **ours,
                     **prompt,
-                    "options": [{**(current[0] if current else {}), **option}],
+                    "options": [{**first, **option}, *current[1:]],
                 }
         if have.get("enabled") and merged_default == existing_default and ours_ok:
             return
@@ -572,7 +599,7 @@ class Community:
             f"/guilds/{self.guild}/onboarding",
             {
                 "enabled": True,
-                "mode": ONBOARDING_DEFAULT_MODE,
+                "mode": have.get("mode", ONBOARDING_DEFAULT_MODE),
                 "default_channel_ids": merged_default,
                 "prompts": prompts,
             },
@@ -589,22 +616,31 @@ def read_text_file(path: str, what: str) -> str:
 
     A vault draft file (front matter between `---` lines) is accepted directly: it must be
     APPROVED or POSTED, only its body is used, and its internal `[NOTE ...]` and `[HOLD ...]`
-    lines are dropped. A plain text file has the same note lines dropped.
+    lines are dropped. A plain text file has the same note lines dropped, and is refused if it
+    looks like it has front matter (a leading `---` line or a `status:` line).
     """
     try:
-        lines = Path(path).read_text(encoding="utf-8").splitlines()
+        lines = Path(path).read_text(encoding="utf-8-sig").splitlines()
     except OSError as err:
         raise SetupError(f"cannot read the {what} file: {err.strerror}") from None
+    while lines and not lines[0].strip():
+        lines.pop(0)
     if lines and lines[0].strip() == "---":
         end = next((n for n, line in enumerate(lines[1:], 1) if line.strip() == "---"), None)
         if end is None:
             raise SetupError(f"the {what} file has front matter that never ends")
-        status = next(
-            (x.partition(":")[2].strip() for x in lines[1:end] if x.startswith("status:")), ""
-        )
-        if status not in ("APPROVED", "POSTED"):
-            raise SetupError(f"the {what} draft is {status or 'missing a status'}, not APPROVED")
+        statuses = [x.partition(":")[2].strip() for x in lines[1:end] if x.startswith("status:")]
+        if len(statuses) != 1:
+            raise SetupError(f"the {what} draft must have exactly one status line")
+        if statuses[0] not in ("APPROVED", "POSTED"):
+            raise SetupError(
+                f"the {what} draft is {statuses[0] or 'missing a status'}, not APPROVED"
+            )
         lines = lines[end + 1 :]
+    else:
+        head = lines[: next((n for n, x in enumerate(lines) if not x.strip()), len(lines))]
+        if any(x.startswith(("status:", "ai_assisted:")) for x in head):
+            raise SetupError(f"the {what} file looks like a draft with broken front matter")
     text = "\n".join(line for line in lines if not NOTE_LINE.match(line.strip())).strip()
     if not text:
         raise SetupError(f"the {what} file is empty")
@@ -718,6 +754,8 @@ def main(
         token = environment.get("DISCORD_BOT_TOKEN", "")
         if not args.guild or not token:
             raise SetupError("need --guild and the DISCORD_BOT_TOKEN environment variable")
+        if not re.fullmatch(r"[0-9]+", args.guild):
+            raise SetupError("--guild must be the server id: digits only")
         api = Api(token, transport)
         real = str(api.call("GET", f"/guilds/{args.guild}")["name"])
         out(f"Server: {real}")
@@ -734,6 +772,12 @@ def main(
         return 0
     except SetupError as err:
         print(f"error: {err}", file=sys.stderr)
+        return 1
+    except (OSError, ValueError) as err:  # network trouble or an unreadable reply (DS-6: stop)
+        print(
+            f"error: could not talk to Discord ({type(err).__name__}); nothing more was sent",
+            file=sys.stderr,
+        )
         return 1
 
 

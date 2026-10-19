@@ -42,6 +42,7 @@ class FakeDiscord:
         }
         self.messages: dict[str, list[dict]] = {}
         self.bodies: list[dict] = []
+        self.seed_on_enable = False
 
     def _new_id(self) -> str:
         self.next_id += 1
@@ -95,6 +96,39 @@ class FakeDiscord:
                 data.get("rules_channel_id") and data.get("public_updates_channel_id")
             ):
                 return 400, {}, json.dumps({"message": "rules channel required"}).encode()
+            if self.seed_on_enable and "COMMUNITY" in data.get("features", []) and not community_on:
+                self.onboarding.update(
+                    {
+                        "default_channel_ids": ["888"],
+                        "mode": 1,
+                        "enabled": False,
+                        "prompts": [
+                            {
+                                "id": "9",
+                                "type": 0,
+                                "title": "Seeded",
+                                "single_select": False,
+                                "required": False,
+                                "in_onboarding": True,
+                                "options": [
+                                    {"id": "10", "title": "One", "role_ids": [], "channel_ids": []}
+                                ],
+                            }
+                        ],
+                    }
+                )
+                self.welcome.update(
+                    {
+                        "welcome_channels": [
+                            {
+                                "channel_id": "777",
+                                "description": "seeded",
+                                "emoji_id": None,
+                                "emoji_name": "x",
+                            }
+                        ]
+                    }
+                )
             self.guild.update(data)
             return ok(self.guild)
         if path == f"/guilds/{GUILD}/welcome-screen" and method in ("GET", "PATCH"):
@@ -540,6 +574,91 @@ def test_a_vault_draft_is_posted_only_when_approved_and_without_its_notes():
             raise AssertionError("accepted front matter that never ends")
         path.write_text("plain text\n[NOTE: drop me]\n", encoding="utf-8")
         assert setup.read_text_file(str(path), "rules") == "plain text"
+
+
+def test_what_discord_seeds_or_the_owner_set_survives_the_first_apply():
+    fake = FakeDiscord()
+    structure(fake)
+    fake.seed_on_enable = True
+    fake.guild["verification_level"] = 4  # stricter than the blueprint: never lowered
+    fake.guild["explicit_content_filter"] = 2
+    code, _ = community(fake)
+    assert code == 0
+    assert fake.guild["verification_level"] == 4
+    assert fake.onboarding["mode"] == 1  # the existing mode is kept
+    assert "888" in fake.onboarding["default_channel_ids"]
+    titles = [p["title"] for p in fake.onboarding["prompts"]]
+    assert titles == ["Seeded", "Ready to join in?"]
+    assert [c["channel_id"] for c in fake.welcome["welcome_channels"]][-1] == "777"
+    assert len(fake.welcome["welcome_channels"]) == 5  # ours (4) + the one already there
+    fake.calls.clear()
+    code, _ = community(fake)
+    assert code == 0 and fake.writes() == []
+
+
+def test_extra_options_in_our_prompt_are_kept():
+    fake = FakeDiscord()
+    structure(fake)
+    community(fake)
+    (prompt,) = fake.onboarding["prompts"]
+    prompt["options"].append(
+        {"id": "77", "title": "Owner added", "role_ids": [], "channel_ids": []}
+    )
+    prompt["options"][0]["title"] = "changed by the owner"  # drift in our own option
+    fake.calls.clear()
+    code, _ = community(fake)
+    assert code == 0 and [m for m, _ in fake.writes()] == ["PUT"]
+    titles = [o["title"] for o in fake.onboarding["prompts"][0]["options"]]
+    assert titles == ["I read the rules", "Owner added"]
+
+
+def test_front_matter_tricks_cannot_get_a_draft_posted():
+    import tempfile
+
+    cases = {
+        "bom and draft": "\ufeff---\nid: MKT-1\nstatus: DRAFT\n---\nbody\n",
+        "leading blank line, draft": "\n\n---\nid: MKT-1\nstatus: DRAFT\n---\nbody\n",
+        "two status lines": "---\nstatus: APPROVED\nstatus: DRAFT\n---\nbody\n",
+        "status line without the fences": "id: MKT-1\nstatus: DRAFT\n\nbody\n",
+        "no status": "---\nid: MKT-1\n---\nbody\n",
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        for name, text in cases.items():
+            path = Path(tmp) / "d.md"
+            path.write_text(text, encoding="utf-8")
+            try:
+                setup.read_text_file(str(path), "welcome")
+            except setup.SetupError:
+                continue
+            raise AssertionError(f"posted: {name}")
+        path.write_text("\ufeff\n---\nstatus: APPROVED\n---\nok\n", encoding="utf-8")
+        assert setup.read_text_file(str(path), "welcome") == "ok"
+
+
+def test_odd_input_and_network_trouble_stop_cleanly():
+    api = setup.Api(TOKEN, FakeDiscord())
+    for path in ("/channels/1/messages?limit=5\n", "/channels/1\n", f"/guilds/{GUILD}\n"):
+        try:
+            api.call("GET" if "messages" in path else "PATCH", path)
+        except setup.SetupError:
+            continue
+        raise AssertionError(f"allowed {path!r}")
+    fake = FakeDiscord()
+    code, _ = run(fake)
+    assert code == 0
+    lines: list[str] = []
+
+    def down(*_a):
+        raise OSError("network is down")
+
+    code = setup.main(
+        ["--guild", GUILD], env={"DISCORD_BOT_TOKEN": TOKEN}, transport=down, out=lines.append
+    )
+    assert code == 1
+    code = setup.main(
+        ["--guild", "abc/../x"], env={"DISCORD_BOT_TOKEN": TOKEN}, transport=fake, out=lines.append
+    )
+    assert code == 1 and not any(TOKEN in line for line in lines)
 
 
 def test_community_stops_on_a_discord_refusal_and_never_leaks_the_token():
