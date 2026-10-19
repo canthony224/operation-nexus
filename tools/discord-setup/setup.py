@@ -11,8 +11,9 @@ dry run. The bot token is read from DISCORD_BOT_TOKEN and is never printed or st
 
 Checked against Discord's developer docs on 2026-10-19 (docs.discord.com/developers): API v10, the
 endpoints used (GET and POST for roles and channels, PATCH for a role and a channel), the Bot
-authorization header, the User-Agent format, the retry_after wait on HTTP 429, the permission values,
-channel type numbers and overwrite types. The dry run prints every permission as a name and a hex value.
+authorization header, the User-Agent format, the retry_after wait on HTTP 429, the permission
+values, channel type numbers and overwrite types. The dry run prints every permission as a name
+and a hex value.
 """
 
 from __future__ import annotations
