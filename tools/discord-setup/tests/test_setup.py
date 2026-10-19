@@ -509,19 +509,19 @@ def test_post_text_posts_edits_and_never_duplicates_or_prints_the_text(tmp_path=
     fake = FakeDiscord()
     structure(fake)
     community(fake)
-    secret_welcome = "WELCOME-TEXT-" + "w" * 30
-    secret_rules = "RULES-TEXT-" + "r" * 30
+    welcome_text = "WELCOME-TEXT-" + "w" * 30
+    rules_text = "RULES-TEXT-" + "r" * 30
     with tempfile.TemporaryDirectory() as tmp:
         wf, rf = Path(tmp) / "w.txt", Path(tmp) / "r.txt"
-        wf.write_text(secret_welcome, encoding="utf-8")
-        rf.write_text(secret_rules, encoding="utf-8")
+        wf.write_text(welcome_text, encoding="utf-8")
+        rf.write_text(rules_text, encoding="utf-8")
         files = ["--post-text", "--welcome-file", str(wf), "--rules-file", str(rf)]
         fake.calls.clear()
         code, lines = community(fake, *files, apply=False)
         assert code == 0 and fake.writes() == []
         code, lines = community(fake, *files)
         assert code == 0 and [m for m, _ in fake.writes()] == ["POST", "POST"]
-        assert not any(secret_welcome in line or secret_rules in line for line in lines)
+        assert not any(welcome_text in line or rules_text in line for line in lines)
         assert all(
             b.get("allowed_mentions") == {"parse": []} for b in fake.bodies if "content" in b
         )
