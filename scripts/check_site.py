@@ -31,6 +31,15 @@ ASSET_EXT = (".html", ".css", ".svg", ".png", ".txt", ".md")
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 
 
+def _urls(handle, host):
+    """The one profile URL accepted for a registered handle."""
+    if host == "bsky.app":
+        return {f"https://{host}/profile/{handle}"}
+    if handle.startswith("u/"):
+        return {f"https://{host}/user/{handle[2:]}"}
+    return {f"https://{host}/{handle}"}
+
+
 class _Page(HTMLParser):
     def __init__(self):
         super().__init__()
@@ -52,7 +61,7 @@ def page_problems(html, registry):
     p.feed(html)
     out = []
     names = [t for t, _ in p.tags]
-    for bad in ("script", "iframe", "form", "object", "embed"):
+    for bad in ("script", "iframe", "form", "object", "embed", "base"):
         if bad in names:
             out.append(f"PS-1/PS-3: <{bad}> is not allowed")
     for tag, a in p.tags:
@@ -61,6 +70,11 @@ def page_problems(html, registry):
                 out.append(f"PS-3: inline handler {k}= on <{tag}>")
         if a.get("style") and re.search(r"url\(|@import", a["style"]):
             out.append("PS-2: url() or @import in an inline style")
+        if tag == "meta" and a.get("http-equiv"):
+            out.append("PS-2: <meta http-equiv> is not allowed")
+        for k in ("src", "href", "srcset", "data", "action"):
+            if re.match(r"\s*(javascript|data|vbscript):", a.get(k, ""), re.I):
+                out.append(f"PS-3: {k}= uses a script or data URL")
         if tag == "link" and a.get("rel") not in ("canonical", "icon"):
             out.append(f"PS-2: <link rel={a.get('rel')!r}> is not allowed")
         for k in ("src", "srcset", "data"):
@@ -91,7 +105,7 @@ def page_problems(html, registry):
         if h == DISCORD:
             seen.add("Discord")
             continue
-        match = [n for n, (hd, host) in PLATFORMS.items() if re.match(rf"https://{re.escape(host)}/", h) and hd.lstrip("@").replace("u/", "") in h]
+        match = [n for n, (hd, host) in PLATFORMS.items() if h in _urls(hd, host)]
         if match:
             seen.add(match[0])
         elif h.startswith("mailto:"):
@@ -128,6 +142,11 @@ def site_problems(site=SITE, registry_path=REGISTRY):
                 out.append(f"{rel}: PS-1/PS-2/PS-3: script or font file")
             elif not name.endswith(ASSET_EXT):
                 out.append(f"{rel}: unexpected file type")
+            if name.endswith((".svg", ".css")):
+                with open(path, encoding="utf-8") as f:
+                    body = f.read()
+                if re.search(r"<script|\son\w+\s*=|@import|javascript:|(?:url\(|href=|src=)\s*['\"]?(?:https?:)?//", body, re.I):
+                    out.append(f"{rel}: PS-1/PS-2/PS-3: script, handler or off-site reference")
             if name.endswith(".html"):
                 with open(path, encoding="utf-8") as f:
                     out += [f"{rel}: {m}" for m in page_problems(f.read(), registry)]

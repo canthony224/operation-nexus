@@ -100,10 +100,20 @@ def test_site():
     bad('href="https://discord.gg/2sYjKYshSc"', 'href="https://discord.gg/other"', "PS-4")
     bad("<footer>", "<footer><p>mail me@gmail.com</p>", "PS-5")
     bad("<main>", '<main><a href="https://example.com/">x</a>', "PS-4")
+    bad("</head>", '<base href="https://example.com/"></head>', "PS-1/PS-3")
+    bad("</head>", '<meta http-equiv="refresh" content="0;url=https://example.com/"></head>', "http-equiv")
+    bad('src="logo.svg"', 'src="javascript:x"', "script or data URL")
+    bad('href="https://www.youtube.com/@hiveplex"', 'href="https://www.youtube.com/evil?x=@hiveplex"', "PS-4")
     bad('alt="Hiveplex logo"', "", "alt")
     bad('<meta property="og:image" content="https://hiveplex.live/share.png">', "", "og:image")
     bad("AI-made", "hand-drawn", "PS-8")
     bad("collects nothing", "is quiet", "PS-9")
+    with tempfile.TemporaryDirectory() as d:  # an .svg with a handler is caught, not just .html
+        with open(os.path.join(d, "index.html"), "w") as f:
+            f.write(good)
+        with open(os.path.join(d, "a.svg"), "w") as f:
+            f.write('<svg onload="x()"/>')
+        assert any("a.svg" in m for m in site_problems(d))
     assert page_problems(good.replace("<footer>", "<footer><p>hi@hiveplex.live</p>", 1), reg) == []
     assert any("not in BRAND-ACCOUNTS" in m for m in page_problems(good, reg.replace("project_hiveplex", "x")))
 
