@@ -232,9 +232,9 @@ def error_details(errors: Any, path: str = "") -> str:
             if key == "_errors" and isinstance(value, list):
                 for item in value:
                     if isinstance(item, dict):
-                        found.append(
-                            f"{path or 'request'}: {item.get('code', '')} {item.get('message', '')}".strip()
-                        )
+                        where = path or "request"
+                        code, note = item.get("code", ""), item.get("message", "")
+                        found.append(f"{where}: {code} {note}".strip())
             else:
                 inner = error_details(value, f"{path}.{key}" if path else str(key))
                 if inner:
