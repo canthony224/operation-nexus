@@ -176,8 +176,8 @@ def test_long_strings_are_truncated(out: io.StringIO) -> None:
 
 
 def test_cut_through_a_secret_leaves_no_fragment(out: io.StringIO) -> None:
-    secret = "sk-" + "Z9" * 30
-    text = "a" * (obs.MAX_FIELD_CHARS - 10) + " " + secret
+    fake_key = "sk-" + "Z9" * 30
+    text = "a" * (obs.MAX_FIELD_CHARS - 10) + " " + fake_key
     LOG.info(text)
     assert "Z9Z9" not in out.getvalue()
 
@@ -197,9 +197,9 @@ def test_hard_cut_keeps_the_exception_tail(out: io.StringIO) -> None:
 
 
 def test_hard_cut_through_a_secret(out: io.StringIO) -> None:
-    secret = "sk-" + "Z9" * 30
-    LOG.info("a" * (obs.MAX_FIELD_CHARS - 20) + secret)
-    assert secret not in out.getvalue()
+    fake_key = "sk-" + "Z9" * 30
+    LOG.info("a" * (obs.MAX_FIELD_CHARS - 20) + fake_key)
+    assert fake_key not in out.getvalue()
 
 
 def test_extra_flag_does_not_bypass_redaction(out: io.StringIO) -> None:
@@ -326,22 +326,22 @@ _SHAPES = [
     "pwd={}",
     '{{"client_secret": "{}"}}',
 ]
-_SECRETS = st.one_of(
+_SHAPED = st.one_of(
     st.tuples(st.sampled_from(_SHAPES), _ALNUM),
     st.tuples(st.just("AKIA{}"), _AWS_BODY),
 )
 
 
 @given(
-    secret=_SECRETS,
+    case=_SHAPED,
     before=st.text(max_size=40),
     after=st.text(max_size=40),
     in_field=st.booleans(),
 )
 def test_secret_shapes_never_reach_output(
-    secret: tuple[str, str], before: str, after: str, in_field: bool
+    case: tuple[str, str], before: str, after: str, in_field: bool
 ) -> None:
-    shape, body = secret
+    shape, body = case
     assume(body not in before + after)
     # Spaces stand for the word boundary a real secret has (`sk-` inside a word is not a key).
     text = before + " " + shape.format(body) + " " + after
