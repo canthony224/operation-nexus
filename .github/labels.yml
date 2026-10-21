@@ -31,3 +31,5 @@
 - { name: "size:XL", color: "d93f0b", description: "1000+ changed lines: split it" }
 
 # test: code-owner gate check (Q-DEV-12); this PR is closed unmerged
+
+# test: code-owner gate as the agent identity (NX-365); closed unmerged
