@@ -71,7 +71,9 @@ def test_ids_sequential_never_reused_and_iterated_in_order(ops: list[Any]) -> No
     assert [w.next_event_seq() for _ in range(3)] == [1, 2, 3]  # SC-14: starts at 1
 
 
-@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf"), 1e30, True, "1"])
+@pytest.mark.parametrize(
+    "bad", [float("nan"), float("inf"), float("-inf"), 1e30, 10**400, True, "1"]
+)
 def test_vec2_rejects_non_finite_huge_and_non_numbers(bad: Any) -> None:
     with pytest.raises(ValueError):
         Vec2(bad, 0.0)

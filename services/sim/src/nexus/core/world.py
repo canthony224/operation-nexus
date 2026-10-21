@@ -59,7 +59,8 @@ class Vec2:
         for name in ("x", "y"):
             v = getattr(self, name)
             number = isinstance(v, int | float) and not isinstance(v, bool)
-            if not (number and math.isfinite(v) and abs(v) <= _MAX_ABS):
+            # Magnitude first: math.isfinite raises OverflowError on huge ints.
+            if not (number and abs(v) <= _MAX_ABS and math.isfinite(v)):
                 raise ValueError(f"Vec2.{name} must be finite with |v| <= {_MAX_ABS:g}, got {v!r}")
             object.__setattr__(self, name, float(v))
 
