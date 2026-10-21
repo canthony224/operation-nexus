@@ -11,6 +11,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from nexus.contracts.gen.common.enums import OwnerKind, Side, UnitKind
+from nexus.core import world as world_mod
 from nexus.core.rng import RngStream
 from nexus.core.world import Campaign, Vec2, World, load, save, state_hash, to_canonical
 
@@ -174,3 +175,8 @@ def _resave(mutate: Any) -> bytes:
 def test_load_rejects_malformed_input(bad: bytes) -> None:
     with pytest.raises(ValueError):
         load(bad)
+
+
+def test_load_checks_cover_every_field() -> None:
+    assert set(world_mod._ENTITY_CHECKS) == set(world_mod._ENTITY_KEYS)
+    assert set(world_mod._CAMPAIGN_CHECKS) == set(world_mod._CAMPAIGN_KEYS)

@@ -13,7 +13,7 @@ is deterministic. The RNG state is world state, so snapshots and the hash cover 
 
 import hashlib
 import math
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, fields
 from typing import Annotated, Any, Self, cast, get_args, get_origin
 
@@ -25,7 +25,14 @@ from nexus.core.rng import SimRng
 FORMAT_VERSION = 1
 _MM = 1000.0  # metres -> millimetres; m/s -> mm/s
 _MAX_ABS = 1e9  # m or m/s; keeps mm quantization well inside int64
-_WORLD_KEYS = ("campaign", "entities", "next_entity_id", "next_event_seq", "rng", "v")
+_CAMPAIGN = "campaign"
+_ENTITIES = "entities"
+_NEXT_ENTITY_ID = "next_entity_id"
+_NEXT_EVENT_SEQ = "next_event_seq"
+_RNG = "rng"
+_V = "v"
+_WORLD_KEYS = (_CAMPAIGN, _ENTITIES, _NEXT_ENTITY_ID, _NEXT_EVENT_SEQ, _RNG, _V)
+_VEC_KEYS = frozenset({"pos", "vel"})
 
 
 def _literal_values(alias: Any) -> tuple[str, ...]:
@@ -153,35 +160,22 @@ def _xy(v: Vec2, quantize: bool) -> list[Any]:
 
 def _entity_data(e: Entity, quantize: bool) -> dict[str, Any]:
     return {
-        "callsign": e.callsign,
-        "commander_id": e.commander_id,
-        "hp": e.hp,
-        "id": e.id,
-        "kind": e.kind,
-        "owner_kind": e.owner_kind,
-        "pos": _xy(e.pos, quantize),
-        "side": e.side,
-        "vel": _xy(e.vel, quantize),
+        k: _xy(getattr(e, k), quantize) if k in _VEC_KEYS else getattr(e, k)
+        for k in sorted(_ENTITY_KEYS)
     }
 
 
 def to_canonical(world: World, *, quantize: bool) -> dict[str, Any]:
     """Plain data with sorted keys and entities in id order; quantized for the hash only."""
-    c = world.campaign
-    return {
-        "campaign": {
-            "clock_paused": c.clock_paused,
-            "config_hash": c.config_hash,
-            "id": c.id,
-            "seed": c.seed,
-            "tick": c.tick,
-        },
-        "entities": [_entity_data(e, quantize) for e in world.entities()],
-        "next_entity_id": world._next_entity_id,
-        "next_event_seq": world._next_event_seq,
-        "rng": {name: dict(sorted(s.items())) for name, s in world.rng.to_state().items()},
-        "v": FORMAT_VERSION,
+    data = {
+        _CAMPAIGN: {k: getattr(world.campaign, k) for k in sorted(_CAMPAIGN_KEYS)},
+        _ENTITIES: [_entity_data(e, quantize) for e in world.entities()],
+        _NEXT_ENTITY_ID: world._next_entity_id,
+        _NEXT_EVENT_SEQ: world._next_event_seq,
+        _RNG: {name: dict(sorted(s.items())) for name, s in world.rng.to_state().items()},
+        _V: FORMAT_VERSION,
     }
+    return dict(sorted(data.items()))
 
 
 def state_hash(world: World) -> str:
@@ -223,46 +217,56 @@ def _vec(value: object, what: str) -> Vec2:
     return Vec2(value[0], value[1])
 
 
+def _bool(value: object, what: str) -> bool:
+    if not isinstance(value, bool):
+        raise ValueError(f"{what} must be a bool, got {value!r}")
+    return value
+
+
+# One check per field, labelled by the field name; keys match `fields(Entity)` / `fields(Campaign)`.
+_ENTITY_CHECKS: dict[str, Callable[[object, str], Any]] = {
+    "id": lambda v, k: _int(v, k, 1),
+    "kind": lambda v, k: _str(v, k, _UNIT_KINDS),
+    "side": lambda v, k: _str(v, k, _SIDES),
+    "owner_kind": lambda v, k: _str(v, k, _OWNER_KINDS),
+    "commander_id": lambda v, k: _str(v, k, optional=True),
+    "callsign": lambda v, k: _str(v, k, optional=True),
+    "pos": _vec,
+    "vel": _vec,
+    "hp": _int,
+}
+_CAMPAIGN_CHECKS: dict[str, Callable[[object, str], Any]] = {
+    "id": _str,
+    "seed": _int,
+    "config_hash": _str,
+    "tick": _int,
+    "clock_paused": _bool,
+}
+
+
 def _load_entity(value: object) -> Entity:
     d = _fields(value, _ENTITY_KEYS, "entity")
-    return Entity(
-        id=_int(d["id"], "entity id", 1),
-        kind=_str(d["kind"], "kind", _UNIT_KINDS),
-        side=_str(d["side"], "side", _SIDES),
-        owner_kind=_str(d["owner_kind"], "owner_kind", _OWNER_KINDS),
-        commander_id=_str(d["commander_id"], "commander_id", optional=True),
-        callsign=_str(d["callsign"], "callsign", optional=True),
-        pos=_vec(d["pos"], "pos"),
-        vel=_vec(d["vel"], "vel"),
-        hp=_int(d["hp"], "hp"),
-    )
+    return Entity(**{k: check(d[k], k) for k, check in _ENTITY_CHECKS.items()})
 
 
 def _load_campaign(value: object) -> Campaign:
-    d = _fields(value, _CAMPAIGN_KEYS, "campaign")
-    if not isinstance(d["clock_paused"], bool):
-        raise ValueError("clock_paused must be a bool")
-    return Campaign(
-        id=_str(d["id"], "campaign id"),
-        seed=_int(d["seed"], "seed"),
-        config_hash=_str(d["config_hash"], "config_hash"),
-        tick=_int(d["tick"], "tick"),
-        clock_paused=d["clock_paused"],
-    )
+    d = _fields(value, _CAMPAIGN_KEYS, _CAMPAIGN)
+    return Campaign(**{k: check(d[k], k) for k, check in _CAMPAIGN_CHECKS.items()})
 
 
 def load(data: bytes) -> World:
     """Rebuild a world from `save` output; the run continues exactly as before."""
     d = _fields(msgpack.unpackb(data, raw=False), _WORLD_KEYS, "snapshot")
-    if _int(d["v"], "format version") != FORMAT_VERSION:
-        raise ValueError(f"unsupported snapshot format version {d['v']}")
-    world = World(_load_campaign(d["campaign"]), SimRng.from_state(d["rng"]))
-    world._next_entity_id = _int(d["next_entity_id"], "next_entity_id", 1)
-    world._next_event_seq = _int(d["next_event_seq"], "next_event_seq", 1)
-    if not isinstance(d["entities"], list):
+    if _int(d[_V], "format version") != FORMAT_VERSION:
+        raise ValueError(f"unsupported snapshot format version {d[_V]}")
+    world = World(_load_campaign(d[_CAMPAIGN]), SimRng.from_state(d[_RNG]))
+    world._next_entity_id = _int(d[_NEXT_ENTITY_ID], _NEXT_ENTITY_ID, 1)
+    world._next_event_seq = _int(d[_NEXT_EVENT_SEQ], _NEXT_EVENT_SEQ, 1)
+    entities = d[_ENTITIES]
+    if not isinstance(entities, list):
         raise ValueError("entities must be a list")
     last_id = 0
-    for raw in d["entities"]:
+    for raw in entities:
         entity = _load_entity(raw)
         if not last_id < entity.id < world._next_entity_id:
             raise ValueError("entity ids must ascend and stay below next_entity_id")
