@@ -131,3 +131,13 @@ def test_body_declaring_more_than_the_cap_is_rejected(
     monkeypatch.setattr(snapshot_file, "_MAX_BODY", 100)  # the real world body is larger
     with pytest.raises(SnapshotError, match="content size"):
         read_snapshot(path)
+
+
+def test_failed_write_leaves_no_tmp_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail(_fd: int) -> None:
+        raise OSError("disk full")
+
+    monkeypatch.setattr("os.fsync", fail)
+    with pytest.raises(OSError):
+        write(tmp_path)
+    assert list(tmp_path.iterdir()) == []

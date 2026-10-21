@@ -75,12 +75,16 @@ def write_snapshot(
     packed = msgpack.packb(asdict(header), use_bin_type=True)
     payload = _LEN.pack(len(packed)) + packed + zstandard.ZstdCompressor().compress(save(world))
     path = directory / f"{c.tick:012d}.nxs"
-    tmp = path.with_name(path.name + ".tmp")
-    with tmp.open("wb") as f:
-        f.write(MAGIC + payload + hashlib.blake2b(payload, digest_size=_TRAILER_LEN).digest())
-        f.flush()
-        os.fsync(f.fileno())
-    tmp.replace(path)
+    tmp = path.with_name(path.name + ".tmp")  # one writer (the sim thread), so a fixed name is safe
+    try:
+        with tmp.open("wb") as f:
+            f.write(MAGIC + payload + hashlib.blake2b(payload, digest_size=_TRAILER_LEN).digest())
+            f.flush()
+            os.fsync(f.fileno())
+        tmp.replace(path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)  # never leave a partial file behind
+        raise
     fsync_dir(directory)
     return path
 
