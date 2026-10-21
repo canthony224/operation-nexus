@@ -106,7 +106,7 @@ Not counted above: the 10 items NX-328..NX-337 in "Brand, marketing, community a
 | NX-157 | AI garrison + Pattern of Life + provocation-gated escalation (THREAT-DIRECTOR §5a) | M | ⬜ | NX-155 | overnight-0: no attacks; 0→1 viewer: no escalation until provocation; staging visible to scouts |
 | NX-158 | `!rebase` and base-to-base repositioning for both sides | S | ⬜ | NX-121 | Units stage forward and refuel at the destination base |
 | NX-031 | Balance harness (`tools/balance`) + bot personas + report | L | ⬜ | NX-126 | Standard scenarios (crowd profiles of 0, 5, 50, 150, 300 and 500 simulated viewers plus the adversarial profiles, Q-ALN-42): 20-seed balance-diff report; the 50-seed acceptance run of TESTING-STRATEGY §3.5a (Q-TEST-4) |
-| NX-032 | Replay CLI + measured storage size | S | ⬜ | NX-103 | Size documented in CLIPS-REPLAY |
+| NX-032 [#176](https://github.com/operation-nexus/operation-nexus/issues/176) | Replay CLI + measured storage size | S | 👀 | NX-103 | Size documented in CLIPS-REPLAY |
 | NX-033 | Headless soak (6h) in nightly | M | ⬜ | NX-016 | No memory growth; hashes replay |
 | NX-301 | Track fade (FOW-6 only; FOW-6a is in NX-150), later phase behind a feature flag (Q-PROD-8, Q-ALN-20) | — | ⬜ | NX-150 | Tracks age back into SIGINT blobs over time after the scout dies or leaves (FOG-OF-WAR) |
 | NX-304 | Objective modes: timed / off per campaign (Q-GD-19 blocks P1; moved from P4 in NX-311) | — | ⬜ | NX-126 | O-1 invariant per mode (STATE-MACHINES §4.5) |
