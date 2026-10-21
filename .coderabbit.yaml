@@ -24,9 +24,9 @@ reviews:
       - "[skip review]"
   pre_merge_checks:
     description:
-      mode: warning   # keeps PRs on .github/pull_request_template.md
+      mode: "warning" # keeps PRs on .github/pull_request_template.md
     docstrings:
-      mode: off       # not a rule here (.agents/rules/code-quality.md)
+      mode: "off"     # not a rule here (.agents/rules/code-quality.md)
   path_filters:
     - "!docs/**"
     - "!**/*.md"
